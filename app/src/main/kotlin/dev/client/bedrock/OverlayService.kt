@@ -38,16 +38,18 @@ class OverlayService : Service() {
             text = "C"; textSize = 18f; setTextColor(Color.WHITE); setBackgroundColor(0xAA222222.toInt())
             setPadding(30, 20, 30, 20)
         }
-        var sx = 0f; var sy = 0f; var ox = 0; var oy = 0; var moved = false
+        var sx = 0f; var sy = 0f; var ox = 0; var oy = 0; var moved = false; var downAt = 0L
         btn.setOnTouchListener { v, e ->
             when (e.action) {
-                MotionEvent.ACTION_DOWN -> { sx = e.rawX; sy = e.rawY; ox = lp.x; oy = lp.y; moved = false }
+                MotionEvent.ACTION_DOWN -> { sx = e.rawX; sy = e.rawY; ox = lp.x; oy = lp.y; moved = false; downAt = System.currentTimeMillis() }
                 MotionEvent.ACTION_MOVE -> {
                     val dx = (e.rawX - sx).toInt(); val dy = (e.rawY - sy).toInt()
                     if (kotlin.math.abs(dx) + kotlin.math.abs(dy) > 10) moved = true
                     lp.x = ox + dx; lp.y = oy + dy; wm.updateViewLayout(v, lp)
                 }
-                MotionEvent.ACTION_UP -> if (!moved) togglePanel(lp.x, lp.y)
+                MotionEvent.ACTION_UP -> if (!moved) {
+                    if (System.currentTimeMillis() - downAt > 700) stopSelf() else togglePanel(lp.x, lp.y)
+                }
             }
             true
         }
@@ -66,12 +68,19 @@ class OverlayService : Service() {
                 setOnCheckedChangeListener { _, on -> Modules.set(this@OverlayService, m.id, on) }
             })
         }
+        box.addView(TextView(this).apply {
+            text = "Close overlay"; setTextColor(Color.RED); textSize = 16f; setPadding(0, 24, 0, 8)
+            setOnClickListener { stopSelf() }
+        })
+        // panel must be touchable for the close button
         val lp = params().apply { this.x = x + 120; this.y = y }
         panel = box; wm.addView(box, lp)
     }
 
     override fun onDestroy() {
-        panel?.let { wm.removeView(it) }; button?.let { wm.removeView(it) }
+        try { panel?.let { wm.removeView(it) } } catch (_: Throwable) {}
+        try { button?.let { wm.removeView(it) } } catch (_: Throwable) {}
+        panel = null; button = null
         super.onDestroy()
     }
 }

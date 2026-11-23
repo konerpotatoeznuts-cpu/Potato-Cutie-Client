@@ -38,6 +38,7 @@ class LauncherActivity : Activity() {
             })
         }
         root.addView(Button(this).apply { text = "Launch Minecraft"; setOnClickListener { launch() } })
+        root.addView(Button(this).apply { text = "Export Minecraft APKs to Downloads"; setOnClickListener { export() } })
         setContentView(ScrollView(this).apply { addView(root) })
     }
 
@@ -53,5 +54,28 @@ class LauncherActivity : Activity() {
         try { startForegroundService(Intent(this, OverlayService::class.java)) }
         catch (t: Throwable) { Toast.makeText(this, "Overlay failed: ${t.javaClass.simpleName}: ${t.message}", Toast.LENGTH_LONG).show() }
         startActivity(game)
+    }
+
+    private fun export() {
+        Toast.makeText(this, "Exporting, this can take a minute...", Toast.LENGTH_LONG).show()
+        Thread {
+            try {
+                val ai = packageManager.getApplicationInfo(bedrock, 0)
+                val files = listOf(ai.sourceDir) + (ai.splitSourceDirs?.toList() ?: emptyList())
+                for (path in files) {
+                    val src = java.io.File(path)
+                    val v = android.content.ContentValues().apply {
+                        put(android.provider.MediaStore.Downloads.DISPLAY_NAME, "mc_" + src.name)
+                        put(android.provider.MediaStore.Downloads.MIME_TYPE, "application/octet-stream")
+                        put(android.provider.MediaStore.Downloads.RELATIVE_PATH, "Download/BedrockExport")
+                    }
+                    val uri = contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, v)!!
+                    contentResolver.openOutputStream(uri)!!.use { o -> src.inputStream().use { it.copyTo(o) } }
+                }
+                runOnUiThread { Toast.makeText(this, "Done: ${files.size} files in Downloads/BedrockExport", Toast.LENGTH_LONG).show() }
+            } catch (t: Throwable) {
+                runOnUiThread { Toast.makeText(this, "Export failed: ${t.javaClass.simpleName}: ${t.message}", Toast.LENGTH_LONG).show() }
+            }
+        }.start()
     }
 }
